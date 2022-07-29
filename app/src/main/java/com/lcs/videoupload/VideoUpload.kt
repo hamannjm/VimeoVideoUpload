@@ -1,5 +1,6 @@
 package com.lcs.videoupload
 
+import okhttp3.RequestBody
 import retrofit2.Call
 import retrofit2.http.*
 
@@ -16,6 +17,6 @@ interface VideoUpload {
         @Header("Upload-Offset") uploadOffset: Long,
         @Header("Content-Type") contentType: String = "application/offset+octet-stream",
         @Url uploadUri: String,
-        @Body videoChunk: ByteArray
-    ): Call<UploadResponse>
+        @Body videoChunk: RequestBody
+    ): Call<Unit>
 }

@@ -11,9 +11,14 @@ data class Upload(
 
 @JsonClass(generateAdapter = true)
 data class UploadResponse(
+    val upload: UploadInfo
+)
+
+@JsonClass(generateAdapter = true)
+data class UploadInfo(
     val status: String,
     @Json(name = "upload_link")
-    val uploadLink: String?,
+    val uploadLink: String,
     val form: String?,
     @Json(name = "complete_uri")
     val completeUri: String?,

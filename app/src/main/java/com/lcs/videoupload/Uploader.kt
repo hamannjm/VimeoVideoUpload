@@ -1,9 +1,9 @@
 package com.lcs.videoupload
 
-import android.content.ContentProvider
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -14,6 +14,21 @@ class Uploader(
     private val fileUri: Uri
 ){
 
+    private var statusCallback: UploadStatusCallback? = null
+
+    private var currentUploadOffset = 0L
+    private lateinit var uploadInformation: UploadResponse
+    private val uploadLocation: String
+        get() {
+            return uploadInformation.upload.uploadLink
+        }
+
+    interface UploadStatusCallback {
+        fun onUploadStarted()
+        fun onUploadSuccess()
+        fun onUploadFailed(reason: String?)
+    }
+
     private val fileDocument by lazy {
         DocumentFile.fromSingleUri(context, fileUri) ?: throw IllegalStateException("File must exist!")
     }
@@ -22,8 +37,17 @@ class Uploader(
         fileDocument.length()
     }
 
+    fun registerStatusCallback(callback: UploadStatusCallback) {
+        statusCallback = callback
+    }
+
+    fun readInBytesTest(): ByteArray {
+        return fileUri.readBytes(context, 0L, CHUNK_SIZE, length)
+    }
+
     fun uploadVideo() {
         Timber.d("Uploading file of size: $length")
+        statusCallback?.onUploadStarted()
         Networking.videoUploadService.createUploadLocation(
             Upload(size = length)
         ).enqueue(
@@ -33,60 +57,62 @@ class Uploader(
                     response: Response<UploadResponse>
                 ) {
                     if (response.isSuccessful) {
-                        onCreateUploadLocationSuccess(response.body()!!)
+                        uploadInformation = response.body()!!
+                        uploadNextChunk()
+                    } else {
+                        statusCallback?.onUploadFailed("Something went wrong with creating upload location!")
                     }
                 }
 
                 override fun onFailure(call: Call<UploadResponse>, t: Throwable) {
                     Timber.e(t)
+                    statusCallback?.onUploadFailed(t.message)
                 }
             }
         )
     }
 
-    private fun onCreateUploadLocationSuccess(
-        response: UploadResponse
-    ) {
-        uploadVideoChunk(0L, response.uploadLink!!)
+    fun retryCurrentChunk() {
+        uploadNextChunk()
     }
 
-    private fun uploadVideoChunk(
-        offset: Long,
-        destination: String
-    ) {
-        val videoChunk = fileUri.readBytes(context, offset, CHUNK_SIZE, length)
+    private fun uploadNextChunk() {
+        val videoChunk = fileUri.readBytes(context, currentUploadOffset, CHUNK_SIZE, length)
+        val requestBodyVideoChunk = videoChunk.toRequestBody()
         Networking.videoUploadService.uploadVideoChunk(
-            uploadOffset = offset,
-            uploadUri = destination,
-            videoChunk = videoChunk
+            uploadOffset = currentUploadOffset,
+            uploadUri = uploadLocation,
+            videoChunk = requestBodyVideoChunk
         ).enqueue(
-            object : Callback<UploadResponse> {
+            object : Callback<Unit> {
                 override fun onResponse(
-                    call: Call<UploadResponse>,
-                    response: Response<UploadResponse>
+                    call: Call<Unit>,
+                    response: Response<Unit>
                 ) {
-                    handleVideoUploadResponse(response, destination)
+                    if (response.isSuccessful) {
+                        handleVideoUploadResponse(response)
+                    } else {
+                        statusCallback?.onUploadFailed("Something went wrong with uploading video chunk!")
+                    }
                 }
 
-                override fun onFailure(call: Call<UploadResponse>, t: Throwable) {
+                override fun onFailure(call: Call<Unit>, t: Throwable) {
                     Timber.e(t)
+                    statusCallback?.onUploadFailed(t.message)
                 }
             }
         )
     }
 
     private fun handleVideoUploadResponse(
-        response: Response<UploadResponse>,
-        destination: String
+        response: Response<Unit>
     ) {
-        if (!response.isSuccessful) {
-            //notify UI
-            Timber.d("Something went wrong with the upload!")
-            return
-        }
-        val newOffset = response.headers()["Upload-Offset"]!!.toLong()
-        if (newOffset < length) {
-            uploadVideoChunk(newOffset, destination)
+        currentUploadOffset = response.headers()["Upload-Offset"]!!.toLong()
+        if (currentUploadOffset < length) {
+            uploadNextChunk()
+        } else {
+            Timber.d("Video has been uploaded successfully!")
+            statusCallback?.onUploadSuccess()
         }
     }
 
@@ -94,6 +120,6 @@ class Uploader(
     companion object {
         private const val KILOBYTE = 1024
         private const val MEGABYTE = KILOBYTE * 1000
-        private const val CHUNK_SIZE = 128 * MEGABYTE
+        private const val CHUNK_SIZE = 1 * MEGABYTE
     }
 }
