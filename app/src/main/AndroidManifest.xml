@@ -32,9 +32,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="https" />
-                <data
-                    android:host="com.lcs.videoupload"
+                <data android:scheme="my.scheme"
+                    android:host="com.lcs.inspectionvideos"
                     android:path="/auth" />
             </intent-filter>
         </activity>

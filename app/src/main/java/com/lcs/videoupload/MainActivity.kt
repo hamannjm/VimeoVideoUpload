@@ -1,24 +1,13 @@
 package com.lcs.videoupload
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import androidx.appcompat.app.AppCompatActivity
+import android.net.Uri
 import android.os.Bundle
-import android.util.Log
-import android.widget.Button
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.databinding.DataBindingUtil
-import androidx.documentfile.provider.DocumentFile
 import com.lcs.videoupload.databinding.ActivityMainBinding
-import com.vimeo.networking2.Authenticator
-import com.vimeo.networking2.ScopeType
-import com.vimeo.networking2.VimeoApiClient
-import com.vimeo.networking2.config.VimeoApiConfiguration
-import timber.log.Timber
 
 class MainActivity : AppCompatActivity() {
     lateinit var binding: ActivityMainBinding
@@ -26,7 +15,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
-//        verifyPermissions()
+        handleAuth(intent.data)
+
         binding.chooser.setOnClickListener {
             val intent = Intent()
                 .setType("*/*")
@@ -35,17 +25,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun verifyPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+    private fun handleAuth(callbackUri: Uri?) {
+        if (callbackUri == null) {
+            if (!VimeoAuth.isAuthenticated()) {
+                Intent(Intent.ACTION_VIEW, Uri.parse(Networking.OATH_URL)).run {
+                    startActivity(this)
+                }
+            } else {
+                binding.upload.isEnabled = true
+            }
             return
         }
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ),
-            FILE_PERMISSION
-        )
+        val accessCode = callbackUri.getQueryParameters("code").single()
+        VimeoAuth.obtainAccessToken(accessCode) {
+            binding.upload.isEnabled = true
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

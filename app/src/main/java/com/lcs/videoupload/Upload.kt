@@ -4,6 +4,17 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
+data class UploadRequest(
+    val upload: Upload
+) {
+    companion object {
+        fun createRequest(size: Long): UploadRequest = UploadRequest(
+            Upload(size = size)
+        )
+    }
+}
+
+@JsonClass(generateAdapter = true)
 data class Upload(
     val approach: String = "tus",
     val size: Long

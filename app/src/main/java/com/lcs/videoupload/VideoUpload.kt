@@ -8,7 +8,7 @@ interface VideoUpload {
 
     @POST("/me/videos")
     fun createUploadLocation(
-        @Body upload: Upload
+        @Body upload: UploadRequest
     ): Call<UploadResponse>
 
     @PATCH

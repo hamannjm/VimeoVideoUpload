@@ -1,46 +1,51 @@
 package com.lcs.videoupload
 
-import android.net.Uri
+import android.content.Context
+import com.chuckerteam.chucker.api.ChuckerInterceptor
 import com.squareup.moshi.Moshi
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okio.Buffer
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
-import retrofit2.create
 import timber.log.Timber
-import java.util.concurrent.TimeUnit
 
 object Networking {
     private const val BASE_URL = "https://api.vimeo.com/"
     const val ACCESS_TOKEN = "5d19ea99ac8c99542da11cfe32d7fa82"
     const val SECONDARY_TOKEN = "47677c54e4169844b5a2d3c32ee619ea"
 
-    val oathUri = Uri.encode("https://api.vimeo.com/oauth/authorize?response_type=code&client_id=74fff6d14ce9f4c59c09cb25832d384ce47d685c&redirect_uri=https://com.lcs.inspectionvideos/auth&state=12345&scope=upload edit")
+    const val OATH_URL = "https://api.vimeo.com/oauth/authorize" +
+        "?response_type=code" +
+        "&client_id=${VimeoAuth.CLIENT_ID}" +
+        "&redirect_uri=${VimeoAuth.CALLBACK_URL}" +
+        "&state=12345" +
+        "&scope=upload+edit"
 
     private val moshi = Moshi.Builder()
         .build()
 
-    val httpClient = OkHttpClient.Builder()
-        .writeTimeout(300, TimeUnit.SECONDS)
-        .readTimeout(300, TimeUnit.SECONDS)
-        .connectTimeout(300, TimeUnit.SECONDS)
-        .addInterceptor(VimeoInterceptor())
-        .addInterceptor(DebugInterceptor())
-        .build()
+    private lateinit var httpClient: OkHttpClient
+    private lateinit var retrofit: Retrofit
 
-    val retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(httpClient)
-        .addConverterFactory(
-            MoshiConverterFactory.create(moshi)
-        )
-        .build()
+    fun init(context: Context) {
+        httpClient = OkHttpClient.Builder()
+            .addInterceptor(VimeoInterceptor())
+            .addInterceptor(DebugInterceptor())
+            .addInterceptor(ChuckerInterceptor.Builder(context).build())
+            .build()
+        retrofit = Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .client(httpClient)
+            .addConverterFactory(
+                MoshiConverterFactory.create(moshi)
+            )
+            .build()
+    }
 
-    val videoUploadService = retrofit.create(VideoUpload::class.java)
-    val authenticationService = retrofit.create(Authenticator::class.java)
+    val videoUploadService by lazy { retrofit.create(VideoUpload::class.java) }
+    val authenticationService by lazy { retrofit.create(Authenticator::class.java) }
 }
 
 class DebugInterceptor: Interceptor {
@@ -57,7 +62,7 @@ class VimeoInterceptor: Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(
         chain.request().let { req ->
             val updatedHeaders = req.headers.newBuilder()
-                .addHeaderIfNotPresent("Authorization", "bearer " + Networking.ACCESS_TOKEN)
+                .addHeaderIfNotPresent("Authorization", "bearer " + VimeoAuth.getAccessToken())
                 .addHeaderIfNotPresent("Content-Type", "application/json")
                 .add("Accept", "application/vnd.vimeo.*+json;version=3.4")
                 .build()

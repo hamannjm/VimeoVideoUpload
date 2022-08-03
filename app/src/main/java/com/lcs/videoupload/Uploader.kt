@@ -9,6 +9,13 @@ import retrofit2.Callback
 import retrofit2.Response
 import timber.log.Timber
 
+/* Upload flow:
+    - Get DocumentFile from Uri
+    - POST to Vimeo to begin upload process
+    - Read in file as byte array from Uri
+    - PATCH to Vimeo
+ */
+
 class Uploader(
     private val context: Context,
     private val fileUri: Uri
@@ -41,15 +48,11 @@ class Uploader(
         statusCallback = callback
     }
 
-    fun readInBytesTest(): ByteArray {
-        return fileUri.readBytes(context, 0L, CHUNK_SIZE, length)
-    }
-
     fun uploadVideo() {
         Timber.d("Uploading file of size: $length")
         statusCallback?.onUploadStarted()
         Networking.videoUploadService.createUploadLocation(
-            Upload(size = length)
+            UploadRequest.createRequest(length)
         ).enqueue(
             object : Callback<UploadResponse> {
                 override fun onResponse(
@@ -78,11 +81,10 @@ class Uploader(
 
     private fun uploadNextChunk() {
         val videoChunk = fileUri.readBytes(context, currentUploadOffset, CHUNK_SIZE, length)
-        val requestBodyVideoChunk = videoChunk.toRequestBody()
         Networking.videoUploadService.uploadVideoChunk(
             uploadOffset = currentUploadOffset,
             uploadUri = uploadLocation,
-            videoChunk = requestBodyVideoChunk
+            videoChunk = videoChunk.toRequestBody()
         ).enqueue(
             object : Callback<Unit> {
                 override fun onResponse(
@@ -120,6 +122,6 @@ class Uploader(
     companion object {
         private const val KILOBYTE = 1024
         private const val MEGABYTE = KILOBYTE * 1000
-        private const val CHUNK_SIZE = 1 * MEGABYTE
+        private const val CHUNK_SIZE = 128 * MEGABYTE
     }
 }

@@ -9,7 +9,7 @@ data class Authentication(
     val grantType: String = "authorization_code",
     val code: String,
     @Json(name = "redirect_uri")
-    val redirectUri: String
+    val redirectUri: String = VimeoAuth.CALLBACK_URL
 )
 
 @JsonClass(generateAdapter = true)
