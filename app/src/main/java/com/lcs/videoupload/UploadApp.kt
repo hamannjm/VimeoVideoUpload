@@ -8,6 +8,5 @@ class UploadApp: Application() {
         super.onCreate()
         Timber.plant(Timber.DebugTree())
         Networking.init(this)
-        VimeoAuth.init(this)
     }
 }

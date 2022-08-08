@@ -52,7 +52,7 @@ class Uploader(
         Timber.d("Uploading file of size: $length")
         statusCallback?.onUploadStarted()
         Networking.videoUploadService.createUploadLocation(
-            UploadRequest.createRequest(length)
+            UploadRequest(length)
         ).enqueue(
             object : Callback<UploadResponse> {
                 override fun onResponse(

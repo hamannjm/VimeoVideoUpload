@@ -7,11 +7,7 @@ import com.squareup.moshi.JsonClass
 data class UploadRequest(
     val upload: Upload
 ) {
-    companion object {
-        fun createRequest(size: Long): UploadRequest = UploadRequest(
-            Upload(size = size)
-        )
-    }
+    constructor(size: Long) : this(Upload(size = size))
 }
 
 @JsonClass(generateAdapter = true)
@@ -22,7 +18,9 @@ data class Upload(
 
 @JsonClass(generateAdapter = true)
 data class UploadResponse(
-    val upload: UploadInfo
+    val upload: UploadInfo,
+    @Json(name = "resource_key")
+    val resourceKey: String
 )
 
 @JsonClass(generateAdapter = true)

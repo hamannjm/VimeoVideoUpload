@@ -8,6 +8,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.databinding.DataBindingUtil
 import com.lcs.videoupload.databinding.ActivityMainBinding
+import com.vimeo.networking2.VideoList
+import com.vimeo.networking2.VimeoAccount
+import com.vimeo.networking2.VimeoCallback
+import com.vimeo.networking2.VimeoResponse
+import timber.log.Timber
 
 class MainActivity : AppCompatActivity() {
     lateinit var binding: ActivityMainBinding
@@ -15,7 +20,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
-        handleAuth(intent.data)
+        authenticate(intent.data)
 
         binding.chooser.setOnClickListener {
             val intent = Intent()
@@ -25,21 +30,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleAuth(callbackUri: Uri?) {
-        if (callbackUri == null) {
-            if (!VimeoAuth.isAuthenticated()) {
-                Intent(Intent.ACTION_VIEW, Uri.parse(Networking.OATH_URL)).run {
-                    startActivity(this)
-                }
-            } else {
-                binding.upload.isEnabled = true
-            }
+    private fun authenticate(callbackUri: Uri?) {
+        if (Networking.isAuthenticated()) {
+            binding.upload.isEnabled = true
+            fetchVideos()
             return
         }
-        val accessCode = callbackUri.getQueryParameters("code").single()
-        VimeoAuth.obtainAccessToken(accessCode) {
-            binding.upload.isEnabled = true
+        if (callbackUri == null) {
+            Intent(
+                Intent.ACTION_VIEW,
+                Networking.createLoginUriWithRedirect("12345")
+            ).run {
+                startActivity(this)
+            }
+        } else {
+            Networking.authenticateWithAccessCodeRedirectUri(
+                callbackUri,
+                response = object : VimeoCallback<VimeoAccount> {
+                    override fun onError(error: VimeoResponse.Error) {
+                        Timber.e(error.message)
+                    }
+
+                    override fun onSuccess(response: VimeoResponse.Success<VimeoAccount>) {
+                        binding.upload.isEnabled = true
+                        makeToast("Logged in successfully!")
+                        fetchVideos()
+                    }
+                }
+            )
         }
+    }
+
+    private fun fetchVideos() {
+        Networking.getVideos(
+            object : VimeoCallback<VideoList> {
+                override fun onError(error: VimeoResponse.Error) {
+                    Timber.e(error.message)
+                }
+
+                override fun onSuccess(response: VimeoResponse.Success<VideoList>) {
+                    val videos = response.data.data ?: listOf()
+                    Timber.d(videos.map { it.toString() + "\r\n" }.toString())
+                }
+            }
+        )
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

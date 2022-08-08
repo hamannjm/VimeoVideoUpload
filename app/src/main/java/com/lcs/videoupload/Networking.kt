@@ -1,8 +1,12 @@
 package com.lcs.videoupload
 
 import android.content.Context
+import android.net.Uri
 import com.chuckerteam.chucker.api.ChuckerInterceptor
 import com.squareup.moshi.Moshi
+import com.vimeo.networking2.*
+import com.vimeo.networking2.config.VimeoApiConfiguration
+import com.vimeo.networking2.logging.LogDelegate
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -13,18 +17,15 @@ import timber.log.Timber
 
 object Networking {
     private const val BASE_URL = "https://api.vimeo.com/"
-    const val ACCESS_TOKEN = "5d19ea99ac8c99542da11cfe32d7fa82"
-    const val SECONDARY_TOKEN = "47677c54e4169844b5a2d3c32ee619ea"
-
-    const val OATH_URL = "https://api.vimeo.com/oauth/authorize" +
-        "?response_type=code" +
-        "&client_id=${VimeoAuth.CLIENT_ID}" +
-        "&redirect_uri=${VimeoAuth.CALLBACK_URL}" +
-        "&state=12345" +
-        "&scope=upload+edit"
+    private const val CALLBACK_URL = "my.scheme://com.lcs.inspectionvideos/auth"
+    private const val CLIENT_ID = "74fff6d14ce9f4c59c09cb25832d384ce47d685c"
+    private const val CLIENT_SECRET = "Io67zF9XuL44jjOKi9LDkv65E50Rgwpq0WXjG03vsc5i0cf4tbsnSFh029f8QL2tN9GLzRcdJHF3dnt8gPvtzPy+TDFaU1uikUTSEmD4dPT4uB30xaci0I9feEtTXU1b"
 
     private val moshi = Moshi.Builder()
         .build()
+
+    private lateinit var vimeoConfig: VimeoApiConfiguration
+    private val vimeoAuth by lazy { com.vimeo.networking2.Authenticator(vimeoConfig) }
 
     private lateinit var httpClient: OkHttpClient
     private lateinit var retrofit: Retrofit
@@ -33,7 +34,7 @@ object Networking {
         httpClient = OkHttpClient.Builder()
             .addInterceptor(VimeoInterceptor())
             .addInterceptor(DebugInterceptor())
-            .addInterceptor(ChuckerInterceptor.Builder(context).build())
+            .addInterceptor(chucker(context))
             .build()
         retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -42,10 +43,66 @@ object Networking {
                 MoshiConverterFactory.create(moshi)
             )
             .build()
+        vimeoConfig = VimeoApiConfiguration.Builder(
+            clientId = CLIENT_ID,
+            clientSecret = CLIENT_SECRET,
+            scopes = listOf(
+                ScopeType.PUBLIC,
+                ScopeType.EDIT,
+                ScopeType.UPLOAD
+            )
+        )
+            .withApplicationInterceptors(
+                listOf(chucker(context))
+            )
+            .withCodeGrantRedirectUrl(CALLBACK_URL)
+            .withLogLevel(LogDelegate.Level.DEBUG)
+            .build()
     }
 
-    val videoUploadService by lazy { retrofit.create(VideoUpload::class.java) }
-    val authenticationService by lazy { retrofit.create(Authenticator::class.java) }
+    private fun chucker(context: Context) = ChuckerInterceptor
+        .Builder(context)
+        .build()
+
+    private val vimeoApi: VimeoApiClient by lazy { VimeoApiClient(vimeoConfig, vimeoAuth) }
+
+    val videoUploadService: VideoUpload by lazy { retrofit.create(VideoUpload::class.java) }
+
+    fun createLoginUriWithRedirect(responseCode: String): Uri = vimeoAuth
+        .createCodeGrantAuthorizationUri(responseCode)
+        .run { Uri.parse(this) }
+
+    fun authenticateWithAccessCodeRedirectUri(
+        redirectUri: Uri,
+        response: VimeoCallback<VimeoAccount>
+    ) {
+        vimeoAuth.authenticateWithCodeGrant(
+            redirectUri.toString().replace("my.scheme", "https"),
+            response
+        )
+    }
+
+    fun getVideos(
+        response: VimeoCallback<VideoList>
+    ) {
+        val videoListUri = vimeoAuth.currentAccount?.user?.metadata?.connections?.videos?.uri
+            ?: return run {
+                response.onError(
+                    VimeoResponse.Error.Unknown("Invalid user!", -1)
+                )
+            }
+        vimeoApi.fetchVideoList(
+            uri = videoListUri,
+            fieldFilter = null,
+            queryParams = null,
+            cacheControl = null,
+            callback = response
+        )
+    }
+
+    fun getAccessToken() = vimeoAuth.currentAccount?.accessToken ?: throw Throwable("Not authorized!")
+
+    fun isAuthenticated() = vimeoAuth.currentAccount?.user != null
 }
 
 class DebugInterceptor: Interceptor {
@@ -62,7 +119,7 @@ class VimeoInterceptor: Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(
         chain.request().let { req ->
             val updatedHeaders = req.headers.newBuilder()
-                .addHeaderIfNotPresent("Authorization", "bearer " + VimeoAuth.getAccessToken())
+                .addHeaderIfNotPresent("Authorization", "bearer " + Networking.getAccessToken())
                 .addHeaderIfNotPresent("Content-Type", "application/json")
                 .add("Accept", "application/vnd.vimeo.*+json;version=3.4")
                 .build()
