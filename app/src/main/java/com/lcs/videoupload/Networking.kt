@@ -7,13 +7,18 @@ import com.squareup.moshi.Moshi
 import com.vimeo.networking2.*
 import com.vimeo.networking2.config.VimeoApiConfiguration
 import com.vimeo.networking2.logging.LogDelegate
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import retrofit2.CallAdapter
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import timber.log.Timber
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
 object Networking {
     private const val BASE_URL = "https://api.vimeo.com/"
@@ -81,6 +86,12 @@ object Networking {
             response
         )
     }
+
+    suspend fun authenticate(
+        redirectUri: Uri
+    ) = toSuspendFun(vimeoAuth::authenticateWithCodeGrant)(
+        redirectUri.toString().replace("my.scheme", "https")
+    )
 
     fun getVideos(
         response: VimeoCallback<VideoList>

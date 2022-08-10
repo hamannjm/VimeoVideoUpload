@@ -3,6 +3,9 @@ package com.lcs.videoupload
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Call
 import retrofit2.Callback
@@ -80,6 +83,11 @@ class Uploader(
     }
 
     private fun uploadNextChunk() {
+        runBlocking {
+            launch {
+                delay(500)
+            }
+        }
         val videoChunk = fileUri.readBytes(context, currentUploadOffset, CHUNK_SIZE, length)
         Networking.videoUploadService.uploadVideoChunk(
             uploadOffset = currentUploadOffset,

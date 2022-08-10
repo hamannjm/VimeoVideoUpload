@@ -7,16 +7,20 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.lifecycleScope
 import com.lcs.videoupload.databinding.ActivityMainBinding
 import com.vimeo.networking2.VideoList
 import com.vimeo.networking2.VimeoAccount
 import com.vimeo.networking2.VimeoCallback
 import com.vimeo.networking2.VimeoResponse
+import kotlinx.coroutines.*
 import timber.log.Timber
+import kotlin.coroutines.EmptyCoroutineContext
 
 class MainActivity : AppCompatActivity() {
     lateinit var binding: ActivityMainBinding
     private lateinit var uploader: Uploader
+    private val coroutineScope = CoroutineScope(Dispatchers.Unconfined)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
@@ -28,6 +32,15 @@ class MainActivity : AppCompatActivity() {
                 .setAction(Intent.ACTION_GET_CONTENT)
             startActivityForResult(Intent.createChooser(intent, "Select a file"), FILE_SELECTION)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        coroutineScope.cancel()
+    }
+
+    private val handler = CoroutineExceptionHandler { _, throwable ->
+        makeToast(throwable.message)
     }
 
     private fun authenticate(callbackUri: Uri?) {
@@ -44,20 +57,11 @@ class MainActivity : AppCompatActivity() {
                 startActivity(this)
             }
         } else {
-            Networking.authenticateWithAccessCodeRedirectUri(
-                callbackUri,
-                response = object : VimeoCallback<VimeoAccount> {
-                    override fun onError(error: VimeoResponse.Error) {
-                        Timber.e(error.message)
-                    }
-
-                    override fun onSuccess(response: VimeoResponse.Success<VimeoAccount>) {
-                        binding.upload.isEnabled = true
-                        makeToast("Logged in successfully!")
-                        fetchVideos()
-                    }
-                }
-            )
+            lifecycleScope.launch(handler) {
+                Networking.authenticate(callbackUri)
+                makeToast("Logged in successfully!")
+                binding.upload.isEnabled = true
+            }
         }
     }
 
@@ -112,7 +116,7 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    fun makeToast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    fun makeToast(message: String?) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
     companion object {
         const val FILE_SELECTION = 7878
