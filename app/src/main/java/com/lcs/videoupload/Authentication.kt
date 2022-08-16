@@ -17,7 +17,7 @@ data class AuthenticationResponse(
     @Json(name = "access_token")
     val token: String,
     @Json(name = "token_type")
-    val tokenType: String,
+    val tokenType: String?,
     val scope: String,
     val app: VimeoApp,
     val user: VimeoUser
@@ -26,15 +26,15 @@ data class AuthenticationResponse(
 @JsonClass(generateAdapter = true)
 data class VimeoApp(
     val name: String,
-    val uri: String
+    val uri: String?
 )
 
 @JsonClass(generateAdapter = true)
 data class VimeoUser(
     val name: String,
-    val uri: String,
+    val uri: String?,
     @Json(name = "upload_quota")
-    val uploadQuota: UploadQuota
+    val uploadQuota: UploadQuota?
 )
 
 @JsonClass(generateAdapter = true)

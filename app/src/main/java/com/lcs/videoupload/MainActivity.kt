@@ -15,7 +15,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
-        handleAuth(intent.data)
+
+        intent.data?.let { callbackUri ->
+            handleAuth(callbackUri)
+        } ?: displayUserInfo()
 
         binding.chooser.setOnClickListener {
             val intent = Intent()
@@ -23,22 +26,35 @@ class MainActivity : AppCompatActivity() {
                 .setAction(Intent.ACTION_GET_CONTENT)
             startActivityForResult(Intent.createChooser(intent, "Select a file"), FILE_SELECTION)
         }
+
+        binding.login.setOnClickListener {
+            VimeoAuth.clearAccessToken()
+            Intent(Intent.ACTION_VIEW, Uri.parse(Networking.OATH_URL)).run {
+                startActivity(this)
+            }
+        }
+        binding.defaultUser.setOnClickListener {
+            VimeoAuth.defaultUser {
+                displayUserInfo()
+            }
+        }
     }
 
-    private fun handleAuth(callbackUri: Uri?) {
-        if (callbackUri == null) {
-            if (!VimeoAuth.isAuthenticated()) {
-                Intent(Intent.ACTION_VIEW, Uri.parse(Networking.OATH_URL)).run {
-                    startActivity(this)
-                }
-            } else {
-                binding.upload.isEnabled = true
+    private fun displayUserInfo() {
+        VimeoAuth.currentUser?.let {
+            binding.upload.isEnabled = true
+            binding.currentUser.text = "${it.user.name}\r\n${it.token}"
+        } ?: run {
+            VimeoAuth.obtainUserInformation {
+                displayUserInfo()
             }
-            return
         }
+    }
+
+    private fun handleAuth(callbackUri: Uri) {
         val accessCode = callbackUri.getQueryParameters("code").single()
         VimeoAuth.obtainAccessToken(accessCode) {
-            binding.upload.isEnabled = true
+            displayUserInfo()
         }
     }
 
